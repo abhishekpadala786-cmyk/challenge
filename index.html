@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Wristband Alert Dashboard</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#9aa4b2;--accent:#ff6b6b;--success:#38b000}
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;margin:0;background:linear-gradient(180deg,#071021 0%,#081526 100%);color:#e6eef6}
+    header{padding:18px 24px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(90deg,rgba(255,255,255,0.02),transparent);backdrop-filter:blur(6px)}
+    header h1{font-size:18px;margin:0}
+    header .controls{display:flex;gap:8px;align-items:center}
+    .container{padding:18px;max-width:1200px;margin:18px auto}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
+    .card{background:var(--card);padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6);min-height:80px}
+    .card h3{margin:0;font-size:13px;color:var(--muted)}
+    .stat{font-size:22px;margin-top:6px}
+    .main{display:grid;grid-template-columns:1fr 380px;gap:12px}
+    .devices{background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);padding:12px;border-radius:12px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;text-align:left;font-size:13px;border-bottom:1px dashed rgba(255,255,255,0.03)}
+    tr.alert{background:linear-gradient(90deg,rgba(255,107,107,0.06),transparent)}
+    .badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px}
+    .badge.ok{background:rgba(56,176,0,0.12);color:var(--success)}
+    .badge.alert{background:rgba(255,107,107,0.12);color:var(--accent)}
+    .map{height:380px;border-radius:12px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+    .map .placeholder{flex:1;background:linear-gradient(90deg,#052033,#032033);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px}
+    .map .actions{display:flex;gap:8px;padding:8px}
+    button{cursor:pointer;border:0;padding:8px 12px;border-radius:8px;background:#0ea5a2;color:#021;box-shadow:0 6px 18px rgba(14,165,162,0.08)}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+    .alert-panel{background:linear-gradient(180deg,#1a0b0b,#2b0f0f);padding:10px;border-radius:10px}
+    .alert-item{display:flex;align-items:center;justify-content:space-between;padding:8px 6px;border-radius:8px}
+    .controls input[type=checkbox]{width:18px;height:18px}
+    footer{padding:12px 24px;color:var(--muted);font-size:13px}
+    @media(max-width:980px){.grid{grid-template-columns:repeat(2,1fr)}.main{grid-template-columns:1fr} .map{height:260px}}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Wristband Alert Dashboard — Tourist Safety</h1>
+    <div class="controls">
+      <label style="font-size:13px;color:var(--muted)">Simulate alerts <input id="simToggle" type="checkbox" checked></label>
+      <button id="ackAll" class="ghost">Acknowledge All</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="grid">
+      <div class="card">
+        <h3>Connected Wristbands</h3>
+        <div class="stat" id="countDevices">0</div>
+      </div>
+      <div class="card">
+        <h3>Active Alerts</h3>
+        <div class="stat" id="countAlerts">0</div>
+      </div>
+      <div class="card">
+        <h3>Help Calls Sent</h3>
+        <div class="stat" id="countCalls">0</div>
+      </div>
+    </div>
+
+    <div class="main">
+      <section class="devices card">
+        <h2 style="margin-top:0">Devices & Alerts</h2>
+        <table aria-label="devices table">
+          <thead>
+            <tr><th>Wristband ID</th><th>Location</th><th>Status</th><th>Last Seen</th><th></th></tr>
+          </thead>
+          <tbody id="devicesBody">
+            <!-- rows injected by JS -->
+          </tbody>
+        </table>
+      </section>
+
+      <aside>
+        <div class="map card">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <strong>Live Map (placeholder)</strong>
+            <div style="font-size:12px;color:var(--muted)">No maps API connected</div>
+          </div>
+          <div class="placeholder">Map widget placeholder — replace with Leaflet/Mapbox/Google Maps</div>
+          <div class="actions">
+            <button id="centerAll">Center on Alerts</button>
+            <button id="exportCsv" class="ghost">Export CSV</button>
+          </div>
+        </div>
+
+        <div style="height:12px"></div>
+
+        <div class="alert-panel card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Recent Alerts</strong>
+            <span style="font-size:12px;color:var(--muted)" id="lastAlertTime">—</span>
+          </div>
+          <div id="alertsList" style="margin-top:8px">
+            <!-- alert items -->
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <footer>Note: This is a front-end prototype. Replace the simulated feed with your real backend or WebSocket feed. Backend endpoints expected: <code>/api/devices</code>, <code>/api/alerts</code>, <code>/api/call</code>.</footer>
+
+  <script>
+    // --------------------
+    // Prototype dashboard logic
+    // --------------------
+
+    // Sample in-memory devices (in a real system you'd fetch from server)
+    const devices = [
+      {id:'WB-1001', name:'Alice', lat:26.9124, lon:75.7873, lastSeen:Date.now(), status:'ok'},
+      {id:'WB-1002', name:'Bob', lat:26.9150, lon:75.7800, lastSeen:Date.now(), status:'ok'},
+      {id:'WB-1003', name:'Claire', lat:26.9180, lon:75.7930, lastSeen:Date.now(), status:'ok'}
+    ];
+
+    // In-memory alerts store
+    let alerts = []; // {id, deviceId, severity, lat, lon, timestamp, handled}
+    let callsSent = 0;
+
+    // DOM refs
+    const devicesBody = document.getElementById('devicesBody');
+    const countDevices = document.getElementById('countDevices');
+    const countAlerts = document.getElementById('countAlerts');
+    const countCalls = document.getElementById('countCalls');
+    const alertsList = document.getElementById('alertsList');
+    const lastAlertTime = document.getElementById('lastAlertTime');
+
+    function renderDevices(){
+      devicesBody.innerHTML = '';
+      devices.forEach(d=>{
+        const tr = document.createElement('tr');
+        tr.className = d.status==='alert' ? 'alert' : '';
+        tr.innerHTML = `
+          <td>${d.id} <div style="font-size:11px;color:var(--muted)">${d.name}</div></td>
+          <td>${d.lat.toFixed(4)}, ${d.lon.toFixed(4)}</td>
+          <td><span class="badge ${d.status==='ok'?'ok':'alert'}">${d.status.toUpperCase()}</span></td>
+          <td>${timeAgo(d.lastSeen)}</td>
+          <td><button onclick="openDevice('${d.id}')">Open</button></td>
+        `;
+        devicesBody.appendChild(tr);
+      });
+      countDevices.textContent = devices.length;
+    }
+
+    function timeAgo(ts){
+      const s = Math.floor((Date.now()-ts)/1000);
+      if(s<60) return s+'s ago';
+      const m = Math.floor(s/60); if(m<60) return m+'m ago';
+      const h = Math.floor(m/60); return h+'h ago';
+    }
+
+    function renderAlerts(){
+      alertsList.innerHTML = '';
+      alerts.slice().reverse().forEach(a=>{
+        const div = document.createElement('div');
+        div.className='alert-item';
+        div.style.marginTop='6px';
+        div.innerHTML = `
+          <div style="display:flex;gap:8px;align-items:center">
+            <div style="width:10px;height:10px;border-radius:50%;background:${a.severity==='high'?'#ff6b6b':'#fbbf24'}"></div>
+            <div>
+              <div style="font-size:13px"><strong>${a.deviceId}</strong> — ${a.severity.toUpperCase()} Alert</div>
+              <div style="font-size:12px;color:var(--muted)">${new Date(a.timestamp).toLocaleString()}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="sendHelp('${a.id}')">Call for Help</button>
+            <button class="ghost" onclick="ackAlert('${a.id}')">Acknowledge</button>
+          </div>
+        `;
+        alertsList.appendChild(div);
+      });
+      countAlerts.textContent = alerts.filter(a=>!a.handled).length;
+      lastAlertTime.textContent = alerts.length ? new Date(alerts[alerts.length-1].timestamp).toLocaleTimeString() : '—';
+    }
+
+    function openDevice(id){
+      const d = devices.find(x=>x.id===id);
+      if(!d) return alert('Device not found');
+      alert(`Device ${d.id} (\nName: ${d.name}\nLocation: ${d.lat}, ${d.lon}\nStatus: ${d.status})`);
+    }
+
+    // called when operator clicks Call for Help
+    async function sendHelp(alertId){
+      const a = alerts.find(x=>x.id===alertId);
+      if(!a) return;
+      // Client-side optimism: mark as handled locally
+      a.handled = true; renderAlerts();
+
+      // Replace with your backend endpoint which should initiate a call/SMS/dispatch.
+      try{
+        // Example POST - in real deployment, implement /api/call on server
+        const res = await fetch('/api/call', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId:a.deviceId, lat:a.lat, lon:a.lon, alertId:a.id})});
+        if(!res.ok) throw new Error('Server error');
+        callsSent++;
+        countCalls.textContent = callsSent;
+        alert('Call initiated (server returned OK)');
+      }catch(e){
+        // Fallback: show details for manual action
+        alert('Failed to contact backend. Here is the info to call manually:\n' + JSON.stringify({deviceId:a.deviceId, lat:a.lat, lon:a.lon},null,2));
+      }
+    }
+
+    function ackAlert(alertId){
+      const a = alerts.find(x=>x.id===alertId);
+      if(a) a.handled = true; renderAlerts();
+    }
+
+    // Simulate an incoming alert
+    function simulateAlert(){
+      const d = devices[Math.floor(Math.random()*devices.length)];
+      d.status = 'alert'; d.lastSeen = Date.now();
+      const id = 'AL-'+Math.random().toString(36).slice(2,8).toUpperCase();
+      const severity = Math.random()>0.6? 'high' : 'medium';
+      const a = {id, deviceId:d.id, severity, lat:d.lat + (Math.random()-0.5)*0.002, lon:d.lon+(Math.random()-0.5)*0.002, timestamp:Date.now(), handled:false};
+      alerts.push(a);
+      renderDevices(); renderAlerts();
+    }
+
+    // Hook up UI controls
+    document.getElementById('simToggle').addEventListener('change',(e)=>{
+      simEnabled = e.target.checked;
+    });
+    document.getElementById('ackAll').addEventListener('click',()=>{ alerts.forEach(a=>a.handled=true); renderAlerts(); });
+    document.getElementById('centerAll').addEventListener('click',()=>{ alert('Center map on active alerts — implement with mapping API'); });
+    document.getElementById('exportCsv').addEventListener('click',()=>{ exportCSV(); });
+
+    // CSV export
+    function exportCSV(){
+      const rows = [['deviceId,lat,lon,severity,timestamp,handled']];
+      alerts.forEach(a=>rows.push([`${a.deviceId},${a.lat},${a.lon},${a.severity},${new Date(a.timestamp).toISOString()},${a.handled}`]));
+      const csv = rows.join('\n');
+      const blob = new Blob([csv], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'alerts.csv'; document.body.appendChild(a); a.click(); a.remove();
+    }
+
+    // Basic boot
+    renderDevices(); renderAlerts();
+
+    // Simulation loop
+    let simEnabled = true;
+    setInterval(()=>{
+      if(simEnabled && Math.random()>0.7) simulateAlert();
+    },3000);
+
+    // OPTIONAL: WebSocket integration sample (commented)
+    /*
+    const ws = new WebSocket('wss://your-server.example/ws/alerts');
+    ws.onmessage = (evt)=>{
+      const msg = JSON.parse(evt.data);
+      // expected: {type:'alert', payload: {id, deviceId, lat, lon, severity, timestamp}}
+      if(msg.type==='alert'){
+        alerts.push({...msg.payload, handled:false});
+        const d = devices.find(x=>x.id===msg.payload.deviceId);
+        if(d){ d.status='alert'; d.lastSeen = msg.payload.timestamp; }
+        renderDevices(); renderAlerts();
+      }
+    };
+    */
+
+    // TIP: call a periodic sync for real devices
+    async function syncFromServer(){
+      try{
+        const res = await fetch('/api/devices');
+        if(!res.ok) return;
+        const data = await res.json();
+        // expected: {devices:[{id,name,lat,lon,lastSeen,status}], alerts:[...]} merge carefully
+      }catch(e){
+        // ignore for prototype
+      }
+    }
+
+  </script>
+</body>
+</html>
